@@ -18,18 +18,37 @@ Cap'n Web is more expressive than almost every other RPC system, because it impl
 
 ## Installation
 
-[Cap'n Web is an npm package.](https://www.npmjs.com/package/capnweb)
+[Cap'n Web is an npm package.](https://www.npmjs.com/package/@dotdo/capnweb)
 
 ```
-npm i capnweb
+npm i @dotdo/capnweb
 ```
+
+### TypeScript Types with @dotdo/types
+
+For projects using the broader @dotdo ecosystem, this package integrates with [@dotdo/types](https://github.com/dotdo/types) which provides canonical type definitions for RPC-related patterns including:
+
+- `RpcPromise<T>` - Promise pipelining type for method chaining
+- `TypedDOStubProxy<T>` - Typed Durable Object stub proxy
+- `CapnWebConfig` - Configuration options for Cap'n Web pipelining
+- JSON-RPC 2.0 message types (`RPCRequest`, `RPCResponse`, etc.)
+- Transport layer types (`Transport`, `TransportConfig`, etc.)
+- RPC client/server interfaces (`RPCClient<T>`, `RPCServer<T>`)
+
+`@dotdo/types` is an optional peer dependency. Install it if you want access to the broader ecosystem types:
+
+```bash
+npm i @dotdo/types
+```
+
+**Note on type overlaps:** `@dotdo/capnweb` exports its own `RpcPromise`, `RpcStub`, and `RpcTarget` types which are the canonical implementation types. The types in `@dotdo/types/rpc` are designed to be compatible and are intended for use in type-only contexts where you need to describe RPC interfaces without depending on the full runtime implementation.
 
 ## Example
 
 A client looks like this:
 
 ```js
-import { newWebSocketRpcSession } from "capnweb";
+import { newWebSocketRpcSession } from "@dotdo/capnweb";
 
 // One-line setup.
 let api = newWebSocketRpcSession("wss://example.com/api");
@@ -43,7 +62,7 @@ console.log(result);
 Here's the server:
 
 ```js
-import { RpcTarget, newWorkersRpcResponse } from "capnweb";
+import { RpcTarget, newWorkersRpcResponse } from "@dotdo/capnweb";
 
 // This is the server implementation.
 class MyApiServer extends RpcTarget {
@@ -106,7 +125,7 @@ type UserProfile = {
 On the server, we implement the interface as an RpcTarget:
 
 ```ts
-import { newWorkersRpcResponse, RpcTarget } from "capnweb";
+import { newWorkersRpcResponse, RpcTarget } from "@dotdo/capnweb";
 
 class ApiServer extends RpcTarget implements PublicApi {
   // ... implement PublicApi ...
@@ -122,7 +141,7 @@ export default {
 On the client, we can use it in a batch request:
 
 ```ts
-import { newHttpBatchRpcSession } from "capnweb";
+import { newHttpBatchRpcSession } from "@dotdo/capnweb";
 
 let api = newHttpBatchRpcSession<PublicApi>("https://example.com/api");
 
@@ -166,7 +185,7 @@ console.log(`Hello, ${profile.name}!`);
 Alternatively, for a long-running interactive application, we can set up a persistent WebSocket connection:
 
 ```ts
-import { newWebSocketRpcSession } from "capnweb";
+import { newWebSocketRpcSession } from "@dotdo/capnweb";
 
 // We declare `api` with `using` so that it'll be disposed at the end of the
 // scope, which closes the connection. `using` is a fairly new JavaScript
@@ -310,7 +329,7 @@ Since all of the not-yet-determined values seen by the callback are represented 
 Cap'n Web works on any JavaScript platform. But, on Cloudflare Workers specifically, it's designed to play nicely with the [the built-in RPC system](https://blog.cloudflare.com/javascript-native-rpc/). The two have basically the same semantics, the only difference being that Workers RPC is a built-in API provided by the Workers Runtime, whereas Cap'n Web is implemented in pure JavaScript.
 
 To facilitate interoperability:
-* On Workers, the `RpcTarget` class exported by "capnweb" is just an alias of the built-in one, so you can use them interchangeably.
+* On Workers, the `RpcTarget` class exported by "@dotdo/capnweb" is just an alias of the built-in one, so you can use them interchangeably.
 * RPC stubs and promises originating from one RPC system can be passed over the other. This will automatically set up proxying.
 * You can also send Workers Service Bindings and Durable Object stubs over Cap'n Web -- again, this sets up proxying.
 
@@ -411,7 +430,7 @@ In HTTP batch mode, a batch of RPC calls can be made in a single HTTP request, w
 **Cap'n Web has a magic trick:** The results of one call in the batch can be used in the parameters to later calls in the same batch, even though the entire batch is sent at once. If you simply take the Promise returned by one call and use it in the parameters to another call, the Promise will be replaced with its resolution before delivering it to the callee. **This is called Promise Pipelining.**
 
 ```ts
-import { RpcTarget, RpcStub, newHttpBatchRpcSession } from "capnweb";
+import { RpcTarget, RpcStub, newHttpBatchRpcSession } from "@dotdo/capnweb";
 
 // Declare our RPC interface.
 interface MyApi extends RpcTarget {
@@ -459,7 +478,7 @@ console.log(greeting3);
 In WebSocket mode, the client forms a long-lived connection to the server, allowing us to make many calls over a long period of time. In this mode, the server can even make asynchronous calls back to the client.
 
 ```ts
-import { RpcTarget, RpcStub, newWebSocketRpcSession } from "capnweb";
+import { RpcTarget, RpcStub, newWebSocketRpcSession } from "@dotdo/capnweb";
 
 // Declare our RPC interface.
 interface MyApi extends RpcTarget {
@@ -497,7 +516,7 @@ console.log(await stub.greet("Bob"));
 The helper function `newWorkersRpcResponse()` makes it easy to implement an HTTP server that accepts both the HTTP batch and WebSocket APIs at once:
 
 ```ts
-import { RpcTarget, newWorkersRpcResponse } from "capnweb";
+import { RpcTarget, newWorkersRpcResponse } from "@dotdo/capnweb";
 
 // Define our server implementation.
 class MyApiImpl extends RpcTarget implements MyApi {
@@ -543,7 +562,7 @@ A server on Node.js is a bit more involved, due to the awkward handling of WebSo
 ```ts
 import http from "node:http";
 import { WebSocketServer } from 'ws';  // npm package
-import { RpcTarget, newWebSocketRpcSession, nodeHttpBatchRpcResponse } from "capnweb";
+import { RpcTarget, newWebSocketRpcSession, nodeHttpBatchRpcResponse } from "@dotdo/capnweb";
 
 class MyApiImpl extends RpcTarget implements MyApi {
   // ... define API, same as above ...
@@ -596,7 +615,7 @@ import {
   newHttpBatchRpcResponse,
   newWebSocketRpcSession,
   RpcTarget,
-} from "npm:capnweb";
+} from "npm:@dotdo/capnweb";
 
 // This is the server implementation.
 class MyApiImpl extends RpcTarget implements MyApi {
@@ -628,7 +647,7 @@ Deno.serve(async (req) => {
 
 ### HTTP server on other runtimes
 
-Every runtime does HTTP handling and WebSockets a little differently, although most modern runtimes use the standard `Request` and `Response` types from the Fetch API, as well as the standard `WebSocket` API. You should be able to use these two functions (exported by `capnweb`) to implement both HTTP batch and WebSocket handling on all platforms:
+Every runtime does HTTP handling and WebSockets a little differently, although most modern runtimes use the standard `Request` and `Response` types from the Fetch API, as well as the standard `WebSocket` API. You should be able to use these two functions (exported by `@dotdo/capnweb`) to implement both HTTP batch and WebSocket handling on all platforms:
 
 ```ts
 // Run a single HTTP batch.
@@ -659,7 +678,7 @@ If your app is built on [Hono](https://hono.dev/) (on any runtime it supports), 
 Cap'n Web can also talk over MessagePorts. This can be used in a browser to talk to Web Workers, iframes, etc.
 
 ```ts
-import { RpcTarget, RpcStub, newMessagePortRpcSession } from "capnweb";
+import { RpcTarget, RpcStub, newMessagePortRpcSession } from "@dotdo/capnweb";
 
 // Declare our RPC interface.
 class Greeter extends RpcTarget {

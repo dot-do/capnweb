@@ -1,10 +1,13 @@
 {
-  "name": "capnweb",
+  "name": "@dotdo/capnweb",
   "version": "0.4.0",
-  "description": "JavaScript/TypeScript-native RPC library with Promise Pipelining",
+  "description": "JavaScript/TypeScript-native RPC library with Promise Pipelining - optimized for Cloudflare Workers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "author": "Kenton Varda <kenton@cloudflare.com>",
+  "contributors": [
+    "Platform.do <npm@platform.do>"
+  ],
   "license": "MIT",
   "files": [
     "dist"
@@ -19,6 +22,13 @@
       "require": {
         "workerd": "./dist/index-workers.cjs",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": {
+        "workerd": "./dist/server.js",
+        "default": "./dist/server.js"
       }
     }
   },
@@ -38,8 +48,10 @@
     "@changesets/cli": "^2.29.8",
     "@cloudflare/vitest-pool-workers": "^0.10.15",
     "@cloudflare/workers-types": "^4.20251216.0",
+    "@dotdo/types": "file:../types",
     "@types/ws": "^8.18.1",
     "@vitest/browser": "^3.2.4",
+    "esbuild": "^0.27.2",
     "pkg-pr-new": "^0.0.60",
     "playwright": "^1.56.1",
     "tsup": "^8.5.1",
@@ -48,12 +60,20 @@
     "vitest": "^3.2.4",
     "ws": "^8.18.3"
   },
+  "peerDependencies": {
+    "@dotdo/types": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@dotdo/types": {
+      "optional": true
+    }
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/cloudflare/capnweb"
+    "url": "https://github.com/dot-do/capnweb"
   },
   "bugs": {
-    "url": "https://github.com/cloudflare/capnweb/issues"
+    "url": "https://github.com/dot-do/capnweb/issues"
   },
-  "homepage": "https://github.com/cloudflare/capnweb#readme"
+  "homepage": "https://github.com/dot-do/capnweb#readme"
 }

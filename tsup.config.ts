@@ -5,7 +5,7 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/index-workers.ts'],
+  entry: ['src/index.ts', 'src/index-workers.ts', 'src/server.ts', 'src/hibernatable-ws.ts'],
   format: ['esm'],
   external: ['cloudflare:workers'],
   dts: true,
@@ -22,5 +22,5 @@ export default defineConfig({
 
   splitting: false,
   treeshake: true,
-  minify: false, // Keep readable for debugging
+  minify: true,
 })
