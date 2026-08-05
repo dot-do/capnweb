@@ -17,7 +17,7 @@ export default defineConfig({
           name: 'node',
           // We throw flow-control test under Node only because it's testing straightforward
           // JavaScript -- no need to run it on every runtime.
-          include: ['__tests__/index.test.ts', '__tests__/flow-control.test.ts'],
+          include: ['__tests__/index.test.ts', '__tests__/flow-control.test.ts', '__tests__/packaging.test.ts'],
           environment: 'node',
         },
       },
@@ -26,7 +26,7 @@ export default defineConfig({
       {
         test: {
           name: 'workerd',
-          include: ['__tests__/index.test.ts', '__tests__/workerd.test.ts'],
+          include: ['__tests__/index.test.ts', '__tests__/workerd.test.ts', '__tests__/hibernation.test.ts'],
           pool: '@cloudflare/vitest-pool-workers',
           poolOptions: {
             workers: {
@@ -38,6 +38,15 @@ export default defineConfig({
                 // to this, not Node nor browsers.)
                 serviceBindings: {
                   testServer: "test-server-workerd",
+                },
+                // The hibernation tests drive this Durable Object directly rather than over a
+                // service binding: they read its incarnation counter between socket operations,
+                // which is the only way to know whether the runtime actually evicted it.
+                durableObjects: {
+                  HIBERNATION_DO: {
+                    className: "HibernationDo",
+                    scriptName: "hibernation-workerd",
+                  },
                 },
                 workers: [
                   {
@@ -55,6 +64,27 @@ export default defineConfig({
                     ],
                     durableObjects: {
                       TEST_DO: "TestDo"
+                    }
+                  },
+                  {
+                    name: "hibernation-workerd",
+                    compatibilityDate: '2026-02-05',
+                    modules: [
+                      {
+                        type: "ESModule",
+                        path: "./__tests__/hibernation-workerd.js",
+                      },
+                      {
+                        type: "ESModule",
+                        path: "./dist/index-workers.js",
+                      },
+                      {
+                        type: "ESModule",
+                        path: "./dist/hibernatable-ws.js",
+                      },
+                    ],
+                    durableObjects: {
+                      HIBERNATION_DO: "HibernationDo"
                     }
                   }
                 ]

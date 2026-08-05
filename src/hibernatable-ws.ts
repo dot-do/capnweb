@@ -8,24 +8,69 @@
  * This transport bridges capnweb's RpcSession with Cloudflare's WebSocket hibernation API.
  * Unlike standard WebSocket transports that use event listeners, this one:
  * - Works with ctx.acceptWebSocket() hibernation API
- * - Queues messages between hibernation wakeups
- * - Can be "resumed" when the DO wakes from hibernation
+ * - Queues messages delivered through the DO's webSocketMessage handler
+ *
+ * ## ⚠ AN RPC SESSION DOES NOT SURVIVE A HIBERNATION CYCLE, AND THE FAILURE IS SILENT
+ *
+ * This was measured against local workerd in `__tests__/hibernation.test.ts`, not reasoned
+ * about. After the runtime evicts the Durable Object and wakes it on the next inbound frame:
+ *
+ * | observable                       | after the wake |
+ * |----------------------------------|----------------|
+ * | Durable Object class constructed | **again** — every instance field is a new object |
+ * | `ctx.getWebSockets().length`     | 1 — the socket is still connected |
+ * | `ws.deserializeAttachment()`     | intact — the transport id is still there |
+ * | the {@link TransportRegistry}    | **empty** |
+ * | the client's next RPC call       | **never returns**: no error, no close frame, no signal |
+ *
+ * The registry is per-instance memory (see the note on {@link TransportRegistry}), so the
+ * post-wake lookup misses. **And rebuilding the transport does not fix it**: `RpcSessionImpl`
+ * holds its `exports` and `imports` tables as arrays of live `StubHook` objects (`src/rpc.ts`),
+ * which are not serializable in principle. A woken Durable Object cannot reconstruct a peer's
+ * import table, so wire ids from before the sleep address nothing.
+ *
+ * **So the supported pattern is: detect the wake and close the socket with a defined code that
+ * the client treats as a reconnect signal.** A reconnect re-runs whatever handshake the
+ * application performs, which is also why hibernation becomes an authorization refresh rather
+ * than an authorization hole. The example below is that pattern. The previous example in this
+ * docstring taught the broken one.
  *
  * @example
  * ```typescript
- * // In your Durable Object:
- * webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
- *   const { transportId } = ws.deserializeAttachment()
- *   const transport = this.transports.get(transportId)
- *   if (transport && typeof message === 'string') {
- *     transport.enqueueMessage(message)
- *   }
- * }
+ * // In your Durable Object. `epoch` is a fresh value per constructed instance; because a wake
+ * // constructs the class again, an attachment stamped with a DIFFERENT epoch is proof that the
+ * // session on the other end of this socket belongs to an instance that no longer exists.
+ * export class SessionDo extends DurableObject {
+ *   epoch = crypto.randomUUID()
+ *   transports = new TransportRegistry()
  *
- * webSocketClose(ws: WebSocket, code: number, reason: string) {
- *   const { transportId } = ws.deserializeAttachment()
- *   const transport = this.transports.get(transportId)
- *   transport?.handleClose(code, reason)
+ *   async fetch(request: Request) {
+ *     // ... authenticate BEFORE accepting; never accept-then-authenticate ...
+ *     const [client, server] = Object.values(new WebSocketPair())
+ *     this.ctx.acceptWebSocket(server)
+ *     const transport = new HibernatableWebSocketTransport(server)
+ *     this.transports.register(transport)
+ *     server.serializeAttachment({ epoch: this.epoch, transportId: transport.id })
+ *     new RpcSession(transport, myApi)
+ *     return new Response(null, { status: 101, webSocket: client })
+ *   }
+ *
+ *   webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+ *     const { epoch, transportId } = ws.deserializeAttachment()
+ *     if (epoch !== this.epoch) {
+ *       // Woken. The session this socket belonged to is gone and cannot be rebuilt.
+ *       ws.close(4001, 'reconnect')
+ *       return
+ *     }
+ *     const transport = this.transports.get(transportId)
+ *     if (transport && typeof message === 'string') transport.enqueueMessage(message)
+ *   }
+ *
+ *   webSocketClose(ws: WebSocket, code: number, reason: string) {
+ *     const { epoch, transportId } = ws.deserializeAttachment()
+ *     if (epoch !== this.epoch) return
+ *     this.transports.get(transportId)?.handleClose(code, reason)
+ *   }
  * }
  * ```
  */
@@ -183,10 +228,17 @@ export class HibernatableWebSocketTransport implements RpcTransport {
 }
 
 /**
- * Transport registry for managing transports across hibernation wakeups
+ * Transport registry, scoped to ONE Durable Object instance.
  *
- * Since we can't serialize the transport itself, we store transports in a map
- * and serialize only the transport ID in the WebSocket attachment.
+ * Since we can't serialize the transport itself, we store transports in a map and serialize only
+ * the transport ID in the WebSocket attachment.
+ *
+ * ⚠ **This map does not, and cannot, survive a hibernation wake.** A wake constructs the Durable
+ * Object class again, so the woken instance holds a *different, empty* registry, and every
+ * transport id in every surviving socket attachment resolves to `undefined`. The header note on
+ * {@link HibernatableWebSocketTransport} carries the measurement and the pattern that works;
+ * `__tests__/hibernation.test.ts` is the test. The name of this class used to say "across
+ * hibernation wakeups", which is the opposite of what it does.
  */
 export class TransportRegistry {
   private transports = new Map<string, HibernatableWebSocketTransport>()
